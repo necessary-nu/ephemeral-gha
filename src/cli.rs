@@ -324,6 +324,7 @@ pub async fn run() -> anyhow::Result<()> {
                                 "{} died; spawning new worker!",
                                 x.actor.unwrap().attributes.unwrap().get("name").unwrap()
                             );
+                            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
                             cleanup(&socket, false).await?;
                             create_ephemeral_runners(&socket, &github_token, &args).await?;
 
