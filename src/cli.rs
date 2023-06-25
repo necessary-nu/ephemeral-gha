@@ -179,7 +179,10 @@ async fn list(socket: &Docker) -> Result<Vec<ContainerSummary>, bollard::errors:
 async fn cleanup(docker: &Docker, force: bool) -> Result<(), bollard::errors::Error> {
     let containers = list(docker).await?;
     for container in containers {
-        if force || container.state.as_deref() == Some("created") {
+        if force
+            || container.state.as_deref() == Some("created")
+            || container.state.as_deref() == Some("exited")
+        {
             let options = Some(RemoveContainerOptions {
                 force: true,
                 ..Default::default()
@@ -294,6 +297,9 @@ pub async fn run() -> anyhow::Result<()> {
                 std::process::exit(1);
             };
 
+            println!("Cleaning up old runners...");
+            cleanup(&socket, false).await?;
+
             println!("Building most recent image...");
             build_gha_container(&socket, &github_token).await?;
 
@@ -318,6 +324,7 @@ pub async fn run() -> anyhow::Result<()> {
                                 "{} died; spawning new worker!",
                                 x.actor.unwrap().attributes.unwrap().get("name").unwrap()
                             );
+                            cleanup(&socket, false).await?;
                             create_ephemeral_runners(&socket, &github_token, &args).await?;
 
                             let socket0 = socket.clone();
