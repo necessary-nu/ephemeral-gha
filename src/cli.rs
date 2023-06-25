@@ -4,7 +4,8 @@ use bollard::{
     container::{CreateContainerOptions, ListContainersOptions, RemoveContainerOptions},
     image::{BuildImageOptions, BuilderVersion, ListImagesOptions, TagImageOptions},
     service::{BuildInfoAux, ContainerSummary},
-    Docker, API_DEFAULT_VERSION, system::EventsOptions,
+    system::EventsOptions,
+    Docker, API_DEFAULT_VERSION,
 };
 use clap::Parser;
 use futures_util::StreamExt;
@@ -14,11 +15,7 @@ use serde::Deserialize;
 use url::Url;
 
 const LABEL_ID: &str = "nu.necessary.ephemeral-gha";
-const USER_AGENT: &str = concat!(
-    env!("CARGO_PKG_NAME"),
-    "/",
-    env!("CARGO_PKG_VERSION")
-);
+const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -63,7 +60,6 @@ fn connect(url: Option<&str>) -> Result<Docker, bollard::errors::Error> {
     } else {
         Docker::connect_with_local_defaults()
     }
-
 }
 
 #[derive(Debug, Deserialize)]
@@ -76,9 +72,7 @@ async fn current_gha_version(token: &str) -> Result<String, reqwest::Error> {
     let client = make_client(token)?;
 
     let response: VersionResponse = client
-        .get(
-            "https://api.github.com/repos/actions/runner/releases/latest"
-        )
+        .get("https://api.github.com/repos/actions/runner/releases/latest")
         .send()
         .await?
         .error_for_status()?
@@ -300,6 +294,9 @@ pub async fn run() -> anyhow::Result<()> {
                 std::process::exit(1);
             };
 
+            println!("Building most recent image...");
+            build_gha_container(&socket, &github_token).await?;
+
             println!("Creating ephemeral runners...");
             create_ephemeral_runners(&socket, &github_token, &args).await?;
 
@@ -317,8 +314,19 @@ pub async fn run() -> anyhow::Result<()> {
                 match event {
                     Ok(x) => {
                         if x.action.as_deref() == Some("die") {
-                            println!("{} died; spawning new worker!", x.actor.unwrap().attributes.unwrap().get("name").unwrap());
+                            println!(
+                                "{} died; spawning new worker!",
+                                x.actor.unwrap().attributes.unwrap().get("name").unwrap()
+                            );
                             create_ephemeral_runners(&socket, &github_token, &args).await?;
+
+                            let socket0 = socket.clone();
+                            let github_token0 = github_token.to_string();
+                            tokio::spawn(async move {
+                                let socket = socket0;
+                                let github_token = github_token0;
+                                build_gha_container(&socket, &github_token).await
+                            });
                         }
                     }
                     Err(e) => eprintln!("Error: {:?}", e),
@@ -327,15 +335,14 @@ pub async fn run() -> anyhow::Result<()> {
         }
     }
 
-    // println!("{:?}", socket.list_containers(Some(ListContainersOptions {
-    //     filters,
-    //     ..Default::default()
-    // })).await?);
-
     Ok(())
 }
 
-async fn create_ephemeral_runners(socket: &Docker, github_token: &str, args: &RunArgs) -> Result<(), anyhow::Error> {
+async fn create_ephemeral_runners(
+    socket: &Docker,
+    github_token: &str,
+    args: &RunArgs,
+) -> Result<(), anyhow::Error> {
     let Some(mut path_segments) = args.url.path_segments() else {
         eprintln!("Invalid URL");
         std::process::exit(1);
@@ -349,8 +356,6 @@ async fn create_ephemeral_runners(socket: &Docker, github_token: &str, args: &Ru
     } else {
         generate_gha_org_token(org_or_user, &github_token).await?
     };
-
-    build_gha_container(&socket, &github_token).await?;
 
     let mut filters = HashMap::new();
     filters.insert("label".to_string(), vec![LABEL_ID.to_string()]);
