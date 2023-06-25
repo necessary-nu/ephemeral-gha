@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1.3-labs
+FROM --platform=linux/amd64 ubuntu:22.04
+
+ARG RUNNER_VERSION
+
+RUN apt-get update && apt-get install -y \
+    ssh \
+    git \
+    build-essential \
+    pkg-config \
+    curl \
+    sudo \
+    unzip \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /runner
+
+RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
+RUN curl -o runner.tar.gz \
+    -L https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz \
+ && tar xf runner.tar.gz \
+ && rm -f runner.tar.gz
+
+COPY <<EOF ephemeral-start.sh
+#!/usr/bin/env bash
+set -e -o pipefail
+
+echo "Running GHA config script..."
+if [[ `printenv LABELS` ]]; then
+    ./config.sh --url `printenv URL` --token `printenv TOKEN` --labels ephemeral,`printenv LABELS` --ephemeral --unattended
+else 
+    ./config.sh --url `printenv URL` --token `printenv TOKEN` --labels ephemeral --ephemeral --unattended
+fi
+
+echo "Running GHA runner..."
+./run.sh
+echo "Finishing..."
+EOF
+RUN chmod +x ./ephemeral-start.sh
+
+RUN adduser --disabled-password --gecos "" runner \
+ && echo 'runner ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+RUN chown -R runner /runner
+USER runner
+
+CMD ["./ephemeral-start.sh"]

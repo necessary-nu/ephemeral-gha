@@ -1,0 +1,26 @@
+[package]
+name = "ephemeral-gha"
+description = "Run ephemeral Github Actions runners on Docker with supervision"
+authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
+version = "0.0.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.71"
+bollard = { git = "https://github.com/fussybeaver/bollard", features = ["rustls", "chrono", "buildkit"] }
+chrono = "0.4.26"
+clap = { version = "4.3.8", features = ["derive", "env"] }
+flate2 = "1.0.26"
+futures-util = "0.3.28"
+rand = "0.8.5"
+reqwest = { version = "0.11.18", default-features = false, features = ["rustls-tls", "gzip", "deflate", "json"] }
+serde = { version = "1.0.164", features = ["derive"] }
+serde_json = "1.0.99"
+tar = "0.4.38"
+thiserror = "1.0.40"
+tokio = { version = "1.28.2", features = ["full"] }
+tracing-subscriber = "0.3.17"
+url = "2.4.0"
